@@ -1,15 +1,27 @@
 #!/usr/bin/env bash
-# Bump the truce iteration suffix in Cargo.toml and commit.
-#   0.1.1-truce.1  ->  0.1.1-truce.2
+# Bump the package version in Cargo.toml and commit. Plain semver on the
+# fork's own line (see "Versioning and releases" in README.md):
 #
-# For a new upstream base (e.g. upstream releases 0.1.2 and we rebase onto
-# it), edit Cargo.toml manually to "0.1.2-truce.1" — that's a rare event.
+#   scripts/bump.sh patch    0.2.0 -> 0.2.1   a fix, no public API change
+#   scripts/bump.sh minor    0.2.1 -> 0.3.0   a breaking API change, an
+#                                             upstream rebase that changes
+#                                             the API, or a raised MSRV
+#   scripts/bump.sh X.Y.Z                     an explicit version
+#
+# Pre-release versions (the old X.Y.Z-truce.N) are refused: a pre-release
+# can't be picked up through a caret requirement, which is the point of
+# the scheme.
 
 set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 cd "$(git rev-parse --show-toplevel)"
+
+if [[ $# -ne 1 ]]; then
+    echo "Usage: scripts/bump.sh patch | minor | X.Y.Z"
+    exit 1
+fi
 
 if ! git diff --quiet || ! git diff --cached --quiet; then
     echo "Working tree dirty. Commit or stash first."
@@ -22,15 +34,28 @@ if [[ -z "$current" ]]; then
     exit 1
 fi
 
-if ! [[ "$current" =~ ^(.+-truce\.)([0-9]+)$ ]]; then
-    echo "Version '$current' doesn't match the X.Y.Z-truce.N pattern."
-    echo "Edit Cargo.toml manually."
+# Strip a pre-release suffix before the arithmetic, so the first bump off
+# the old scheme works: 0.1.1-truce.14 + minor = 0.2.0.
+base="${current%%-*}"
+if ! [[ "$base" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    echo "Version '$current' isn't X.Y.Z. Edit Cargo.toml manually."
     exit 1
 fi
+major="${BASH_REMATCH[1]}"
+minor="${BASH_REMATCH[2]}"
+patch="${BASH_REMATCH[3]}"
 
-base="${BASH_REMATCH[1]}"
-counter="${BASH_REMATCH[2]}"
-next="${base}$((counter + 1))"
+case "$1" in
+    patch) next="$major.$minor.$((patch + 1))" ;;
+    minor) next="$major.$((minor + 1)).0" ;;
+    *)
+        if ! [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "'$1' isn't patch, minor or a plain X.Y.Z version."
+            exit 1
+        fi
+        next="$1"
+        ;;
+esac
 
 echo "Bumping version: $current -> $next"
 

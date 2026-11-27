@@ -172,15 +172,28 @@ This fork forwards `Ignored` keyboard events to the host on all three platforms,
 
 The forward decision is the handler's returned `EventStatus`, so a `WindowHandler` must return `Captured` for keys it consumes (a focused text field, an editor shortcut) or the host will also act on them. Standalone top-level windows own their window and forward nothing.
 
-## Release scripts
+## Versioning and releases
 
-`scripts/` carries the publishing workflow for the fork:
+`baseview-truce` follows plain [semver](https://semver.org) on its own line, independent of upstream's version numbers:
 
-- `scripts/bump.sh <version>` — bump the version in `Cargo.toml` + workspace examples, regenerate `Cargo.lock`, and commit.
-- `scripts/release.sh` — drives the full release: verify → bump → publish, with confirmation prompts at each step.
-- `scripts/publish.sh` — `cargo publish` to crates.io once a release commit is tagged.
-- `scripts/verify.sh` — clippy + tests + docs pass before release.
-- `scripts/sync-upstream.sh` — fetch RustAudio/baseview's `master` and either merge or rebase the truce-fork patches on top, used to pick up upstream changes before bumping. Keeps the patch set small by replaying onto the latest upstream rather than letting the fork drift.
+- **Patch** (`0.2.0` → `0.2.1`): a fix with no public API change - most of what this fork carries.
+- **Minor** (`0.2.x` → `0.3.0`): a breaking API change, an upstream rebase that changes the API, or a raised minimum Rust version.
+
+Depend on a caret range, so fixes reach you through `cargo update` without a release of your own:
+
+```toml
+baseview = { package = "baseview-truce", version = "0.2" }
+```
+
+Releases before 0.2.0 were `0.1.1-truce.N` pre-releases of upstream 0.1.1, which a caret range can't pick up, so each needed an exact pin. 0.2.0 is `0.1.1-truce.14` plus a clippy fix.
+
+Each release tag (`vX.Y.Z`) records the upstream commit the release is based on and the patches on top of it. The scripts in `scripts/`:
+
+- `scripts/bump.sh patch | minor | X.Y.Z` - bump the version in `Cargo.toml`, refresh `Cargo.lock`, and commit.
+- `scripts/release.sh` - on `master`: verify, tag `vX.Y.Z` (with the upstream base and patch list), and push `master` and the tag to the `truce` remote.
+- `scripts/publish.sh` - `cargo publish` to crates.io, only from the tagged commit.
+- `scripts/verify.sh` - fmt, check, clippy and tests on the host, which the other two run first.
+- `scripts/sync-upstream.sh` - fetch RustAudio/baseview's `master` and replay the fork's patches on top, to pick up upstream changes before bumping. Keeps the patch set small rather than letting the fork drift.
 
 ## License
 
